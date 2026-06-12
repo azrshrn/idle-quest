@@ -1275,6 +1275,7 @@ function heroDie() {
   enemyAttackTimer = 0;
   const wasBoss = gs.currentEnemy && gs.currentEnemy.isBoss;
   gs.currentEnemy = null;
+  gs.wasLastEnemyBoss = wasBoss;
   gs.comboCount = 0;
   gs.comboTimer = 0;
   updateComboDisplay();
@@ -1323,7 +1324,7 @@ function respawnNow() {
 }
 
 function skipBoss() {
-  if (!gs.currentEnemy || !gs.currentEnemy.isBoss) {
+  if (!gs.wasLastEnemyBoss) {
     showToast('⏭️ No boss to skip!');
     return;
   }
