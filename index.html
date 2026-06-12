@@ -566,10 +566,9 @@ function getHeroStats() {
   return { atk, def, maxHp };
 }
 
-function getEnemyDef() {
-  // Enemy DEF = 30% of their max HP, scaled down
-  if (!gs.currentEnemy) return 0;
-  return Math.floor(gs.currentEnemy.maxHp * 0.08);
+function getEnemyDef(enemy) {
+  if (!enemy) return 0;
+  return Math.floor(enemy.maxHp * 0.08);
 }
 
 // ============================================================
@@ -636,17 +635,14 @@ function spawnEnemy() {
 let combatLogCount = 0;
 function combatLog(text, type='damage') {
   const log = document.getElementById('combat-log');
+  if (!log) return;
+  if (combatLogCount > 8) return;
   const el = document.createElement('div');
   el.className = `combat-text ${type}`;
   el.textContent = text;
   log.appendChild(el);
   combatLogCount++;
-  if (combatLogCount > 8) {
-    const first = log.firstChild;
-    if (first) first.remove();
-    combatLogCount--;
-  }
-  setTimeout(() => { el.remove(); combatLogCount--; }, 1500);
+  setTimeout(() => { if (el.parentNode) { el.remove(); combatLogCount--; } }, 1500);
 }
 
 // ============================================================
@@ -655,14 +651,14 @@ function combatLog(text, type='damage') {
 
 let heroAttackTimer = 0;
 let enemyAttackTimer = 0;
-const HERO_ATTACK_SPEED = 1500;
+const HERO_ATTACK_SPEED = 1500; // ms
 
 function heroAttack() {
   if (!gs.currentEnemy || !gs.isHeroAlive || !gs.autoBattle) return;
 
   const stats = getHeroStats();
   const isCrit = Math.random() < 0.1;
-  const enemyDef = gs.currentEnemy.def || getEnemyDef();
+  const enemyDef = gs.currentEnemy.def || getEnemyDef(gs.currentEnemy);
   let dmg = stats.atk - Math.floor(enemyDef * 0.3);
   dmg = Math.max(1, dmg);
   if (isCrit) dmg = Math.floor(dmg * 1.5);
@@ -671,23 +667,27 @@ function heroAttack() {
 
   // Hero attack animation
   const heroEl = document.getElementById('hero');
-  heroEl.classList.remove('attack','hurt');
-  void heroEl.offsetWidth;
-  heroEl.classList.add('attack');
-  setTimeout(() => heroEl.classList.remove('attack'), 300);
+  if (heroEl) {
+    heroEl.classList.remove('attack','hurt');
+    void heroEl.offsetWidth;
+    heroEl.classList.add('attack');
+    setTimeout(() => { if (heroEl) heroEl.classList.remove('attack'); }, 300);
+  }
 
   // Enemy hurt animation
   const enemyEl = document.getElementById('enemy');
-  enemyEl.classList.remove('hurt');
-  void enemyEl.offsetWidth;
-  enemyEl.classList.add('hurt');
-  setTimeout(() => enemyEl.classList.remove('hurt'), 300);
+  if (enemyEl) {
+    enemyEl.classList.remove('hurt');
+    void enemyEl.offsetWidth;
+    enemyEl.classList.add('hurt');
+    setTimeout(() => { if (enemyEl) enemyEl.classList.remove('hurt'); }, 300);
+  }
 
   combatLog(`${isCrit ? '💥' : ''}-${dmg}${isCrit ? ' CRIT!' : ''}`, isCrit ? 'crit' : 'damage');
   playSound(isCrit ? 'crit' : 'hit');
   updateEnemyHPBar();
 
-  if (gs.currentEnemy.hp <= 0) {
+  if (gs.currentEnemy && gs.currentEnemy.hp <= 0) {
     enemyDie();
   }
 }
@@ -696,16 +696,19 @@ function enemyAttack() {
   if (!gs.currentEnemy || !gs.isHeroAlive || !gs.autoBattle) return;
 
   const stats = getHeroStats();
-  let dmg = gs.currentEnemy.atk - Math.floor(stats.def * 0.3);
+  const eDef = gs.currentEnemy.def || getEnemyDef(gs.currentEnemy);
+  let dmg = gs.currentEnemy.atk - Math.floor(eDef * 0.3);
   dmg = Math.max(1, dmg);
 
   gs.hero.hp = Math.max(0, gs.hero.hp - dmg);
 
   const heroEl = document.getElementById('hero');
-  heroEl.classList.remove('hurt');
-  void heroEl.offsetWidth;
-  heroEl.classList.add('hurt');
-  setTimeout(() => heroEl.classList.remove('hurt'), 300);
+  if (heroEl) {
+    heroEl.classList.remove('hurt');
+    void heroEl.offsetWidth;
+    heroEl.classList.add('hurt');
+    setTimeout(() => { if (heroEl) heroEl.classList.remove('hurt'); }, 300);
+  }
 
   combatLog(`-${dmg}`, 'damage');
   playSound('hit');
@@ -718,6 +721,13 @@ function enemyAttack() {
 
 function enemyDie() {
   const e = gs.currentEnemy;
+  if (!e) return;
+
+  // Prevent double-triggering and future attacks
+  gs.currentEnemy = null;
+  heroAttackTimer = HERO_ATTACK_SPEED; // Skip next hero attack
+  enemyAttackTimer = 0; // Stop enemy attacks
+
   const gold = randInt(e.gold[0], e.gold[1]);
   const xp = randInt(e.isBoss ? 15 : 3, e.isBoss ? 30 : 8);
 
@@ -735,13 +745,14 @@ function enemyDie() {
   gs.heroPosX = Math.min(50, gs.heroPosX + 5);
   document.getElementById('hero').style.left = gs.heroPosX + '%';
 
+  const delay = e.isBoss ? 1000 : 600;
   setTimeout(() => {
     if (gs.enemiesKilled >= gs.enemiesPerStage) {
       nextStage();
     } else {
       spawnEnemy();
     }
-  }, e.isBoss ? 1000 : 600);
+  }, delay);
 
   updateUI();
   saveGame();
@@ -752,16 +763,24 @@ function heroDie() {
   gs.respawnTimer = 5;
   gs.hero.hp = 0;
   gs.totalDeaths++;
+  // Stop combat timers immediately
+  heroAttackTimer = HERO_ATTACK_SPEED;
+  enemyAttackTimer = 0;
+  gs.currentEnemy = null;
 
   const lostGold = Math.floor(gs.hero.gold * 0.1);
   gs.hero.gold = Math.max(0, gs.hero.gold - lostGold);
 
   playSound('death');
 
-  document.getElementById('death-enemies').textContent = `Enemies slain: ${gs.totalKills}`;
-  document.getElementById('death-gold-lost').textContent = `Gold lost: ${formatNum(lostGold)}`;
-  document.getElementById('death-section').textContent = `Reached Section ${gs.stage.section}-${gs.stage.level}`;
-  document.getElementById('overlay').classList.add('show');
+  const deathEnemies = document.getElementById('death-enemies');
+  const deathGoldLost = document.getElementById('death-gold-lost');
+  const deathSection = document.getElementById('death-section');
+  if (deathEnemies) deathEnemies.textContent = `Enemies slain: ${gs.totalKills}`;
+  if (deathGoldLost) deathGoldLost.textContent = `Gold lost: ${formatNum(lostGold)}`;
+  if (deathSection) deathSection.textContent = `Reached Section ${gs.stage.section}-${gs.stage.level}`;
+  const overlay = document.getElementById('overlay');
+  if (overlay) overlay.classList.add('show');
   countdownRespawn();
 
   updateUI();
@@ -770,12 +789,17 @@ function heroDie() {
 
 function countdownRespawn() {
   const txt = document.getElementById('respawn-text');
+  if (!txt) return;
   if (gs.respawnTimer > 0) {
     txt.textContent = `Respawning in ${gs.respawnTimer}s...`;
     gs.respawnTimer--;
     setTimeout(countdownRespawn, 1000);
   } else {
     txt.textContent = 'Ready!';
+    // Auto-respawn when timer hits 0
+    setTimeout(() => {
+      if (!gs.isHeroAlive) respawnHero();
+    }, 500);
   }
 }
 
@@ -916,14 +940,15 @@ function updateEnemyHPBar() {
   if (!gs.currentEnemy) return;
   const pct = Math.max(0, gs.currentEnemy.hp / gs.currentEnemy.maxHp * 100);
   const bar = document.getElementById('enemy-hp-bar');
+  if (!bar) return;
   bar.style.width = pct + '%';
   if (pct > 60) bar.style.background = 'linear-gradient(90deg, #27ae60, #2ecc71)';
   else if (pct > 30) bar.style.background = 'linear-gradient(90deg, #f39c12, #f1c40f)';
   else bar.style.background = 'linear-gradient(90deg, #c0392b, #e74c3c)';
-  document.getElementById('enemy-hp-text').textContent =
-    `${formatNum(gs.currentEnemy.hp)}/${formatNum(gs.currentEnemy.maxHp)}`;
-  document.getElementById('enemy-label').textContent =
-    `HP ${formatNum(gs.currentEnemy.hp)}`;
+  const hpText = document.getElementById('enemy-hp-text');
+  const label = document.getElementById('enemy-label');
+  if (hpText) hpText.textContent = `${formatNum(gs.currentEnemy.hp)}/${formatNum(gs.currentEnemy.maxHp)}`;
+  if (label) label.textContent = `HP ${formatNum(gs.currentEnemy.hp)}`;
 }
 
 function updateUI() {
@@ -1065,26 +1090,33 @@ function showInventoryPopup(idx) {
 }
 
 function showPopup(item) {
-  document.getElementById('popup-title').textContent = `${item.emoji} ${item.name}`;
+  const titleEl = document.getElementById('popup-title');
   const rarityEl = document.getElementById('popup-rarity');
-  rarityEl.textContent = RARITY_NAMES[item.rarity];
-  rarityEl.className = `popup-rarity ${RARITY_COLORS[item.rarity]}`;
-
   const statsEl = document.getElementById('popup-stats');
+  const btnEquip = document.getElementById('btn-popup-equip');
+  const btnSell = document.getElementById('btn-popup-sell');
+  const popup = document.getElementById('gear-popup');
+
+  if (!titleEl || !statsEl || !btnEquip || !btnSell || !popup) return;
+
+  const r = Math.min(item.rarity, 4);
+  titleEl.textContent = `${item.emoji} ${item.name}`;
+  if (rarityEl) {
+    rarityEl.textContent = RARITY_NAMES[r];
+    rarityEl.className = `popup-rarity ${RARITY_COLORS[r]}`;
+  }
+
   statsEl.innerHTML = '';
   if (item.atk) statsEl.innerHTML += `<div class="popup-stat"><span class="popup-stat-label">ATK</span><span class="popup-stat-value atk">+${item.atk}</span></div>`;
   if (item.def) statsEl.innerHTML += `<div class="popup-stat"><span class="popup-stat-label">DEF</span><span class="popup-stat-value def">+${item.def}</span></div>`;
   statsEl.innerHTML += `<div class="popup-stat"><span class="popup-stat-label">Level Req</span><span class="popup-stat-value">${item.level}</span></div>`;
-  statsEl.innerHTML += `<div class="popup-stat"><span class="popup-stat-label">Rarity</span><span class="popup-stat-value" style="color:${['#ccc','#2ecc71','#3498db','#9b59b6','#FFD700'][item.rarity]}">${RARITY_NAMES[item.rarity]}</span></div>`;
+  statsEl.innerHTML += `<div class="popup-stat"><span class="popup-stat-label">Rarity</span><span class="popup-stat-value" style="color:${['#ccc','#2ecc71','#3498db','#9b59b6','#FFD700'][r]}">${RARITY_NAMES[r]}</span></div>`;
 
-  const btnEquip = document.getElementById('btn-popup-equip');
   const currentEquipped = gs.equipment[item.slot];
   btnEquip.textContent = (currentEquipped === item) ? 'Unequip' : (item.atk ? 'Equip Weapon' : 'Equip');
-
-  const sellValue = Math.floor(item.level * RARITY_SELL_MULT[item.rarity] * 2);
-  document.getElementById('btn-popup-sell').textContent = `Sell 💰${formatNum(sellValue)}`;
-
-  document.getElementById('gear-popup').classList.add('show');
+  const sellValue = Math.floor(item.level * RARITY_SELL_MULT[r] * 2);
+  btnSell.textContent = `Sell 💰${formatNum(sellValue)}`;
+  popup.classList.add('show');
 }
 
 function closePopup() {
@@ -1095,7 +1127,8 @@ function closePopup() {
 function popupEquip() {
   if (!popupItem) return;
   if (popupMode === 'equip-slot') {
-    gs.inventory.push(gs.equipment[popupItem.slot]);
+    const currentlyEquipped = gs.equipment[popupItem.slot];
+    if (currentlyEquipped) gs.inventory.push(currentlyEquipped);
     gs.equipment[popupItem.slot] = null;
   } else if (popupMode === 'inventory') {
     if (gs.equipment[popupItem.slot]) gs.inventory.push(gs.equipment[popupItem.slot]);
@@ -1128,15 +1161,19 @@ function popupSell() {
 // ============================================================
 
 function showSettings() {
-  document.getElementById('settings-popup').classList.add('show');
-  document.getElementById('sfx-toggle').textContent = gs.sfxEnabled ? 'ON' : 'OFF';
-  document.getElementById('sfx-toggle').className = `toggle-btn ${gs.sfxEnabled ? 'on' : 'off'}`;
-  document.getElementById('settings-auto-toggle').textContent = gs.autoBattle ? 'ON' : 'OFF';
-  document.getElementById('settings-auto-toggle').className = `toggle-btn ${gs.autoBattle ? 'on' : 'off'}`;
-  document.getElementById('settings-levelups').textContent = gs.totalLevelUps;
-  document.getElementById('settings-deaths').textContent = gs.totalDeaths;
-  const elapsed = Date.now() - gs.startTime;
-  document.getElementById('settings-time').textContent = formatTime(elapsed);
+  const sp = document.getElementById('settings-popup');
+  const sfxT = document.getElementById('sfx-toggle');
+  const autoT = document.getElementById('settings-auto-toggle');
+  const lvlUs = document.getElementById('settings-levelups');
+  const deaths = document.getElementById('settings-deaths');
+  const timeEl = document.getElementById('settings-time');
+  if (!sp) return;
+  sp.classList.add('show');
+  if (sfxT) { sfxT.textContent = gs.sfxEnabled ? 'ON' : 'OFF'; sfxT.className = `toggle-btn ${gs.sfxEnabled ? 'on' : 'off'}`; }
+  if (autoT) { autoT.textContent = gs.autoBattle ? 'ON' : 'OFF'; autoT.className = `toggle-btn ${gs.autoBattle ? 'on' : 'off'}`; }
+  if (lvlUs) lvlUs.textContent = gs.totalLevelUps;
+  if (deaths) deaths.textContent = gs.totalDeaths;
+  if (timeEl) timeEl.textContent = formatTime(Date.now() - gs.startTime);
 }
 
 function closeSettings() {
@@ -1186,11 +1223,10 @@ function checkOfflineProgress() {
     const elapsed = Date.now() - save.lastSaveTime;
     if (elapsed < 30000) return; // less than 30s, skip
 
-    const maxOffline = 4 * 60 * 60 * 1000; // 4 hours max
+    const maxOffline = 4 * 60 * 60 * 1000;
     const offlineMs = Math.min(elapsed, maxOffline);
     const offlineSeconds = offlineMs / 1000;
 
-    // Rough estimate: ~10 gold/sec and 2 xp/sec while away
     const goldRate = 10;
     const xpRate = 2;
     const estGold = Math.floor(offlineSeconds * goldRate * 0.5);
@@ -1199,7 +1235,6 @@ function checkOfflineProgress() {
     if (estGold > 0 || estXP > 0) {
       gs.hero.gold += estGold;
       if (estXP > 0) {
-        const originalXp = gs.hero.xp;
         gs.hero.xp += estXP;
         if (gs.hero.xp >= gs.hero.xpToLevel) {
           while (gs.hero.xp >= gs.hero.xpToLevel) {
@@ -1214,16 +1249,21 @@ function checkOfflineProgress() {
         }
       }
 
-      document.getElementById('offline-time').textContent = formatTime(offlineMs);
-      document.getElementById('offline-gold-msg').textContent = estGold > 0 ? `+${formatNum(estGold)} 💰 while away` : '';
-      document.getElementById('offline-xp-msg').textContent = estXP > 0 ? `+${estXP} ✨ XP while away` : '';
-      document.getElementById('welcome-banner').classList.add('show');
+      const offlineTimeEl = document.getElementById('offline-time');
+      const offlineGoldMsg = document.getElementById('offline-gold-msg');
+      const offlineXpMsg = document.getElementById('offline-xp-msg');
+      const welcomeBanner = document.getElementById('welcome-banner');
+      if (offlineTimeEl) offlineTimeEl.textContent = formatTime(offlineMs);
+      if (offlineGoldMsg) offlineGoldMsg.textContent = estGold > 0 ? `+${formatNum(estGold)} 💰 while away` : '';
+      if (offlineXpMsg) offlineXpMsg.textContent = estXP > 0 ? `+${estXP} ✨ XP while away` : '';
+      if (welcomeBanner) welcomeBanner.classList.add('show');
     }
   } catch(e) {}
 }
 
 function dismissWelcome() {
-  document.getElementById('welcome-banner').classList.remove('show');
+  const banner = document.getElementById('welcome-banner');
+  if (banner) banner.classList.remove('show');
   updateUI();
   saveGame();
 }
@@ -1234,11 +1274,12 @@ function dismissWelcome() {
 
 function showToast(text) {
   const container = document.getElementById('toast-container');
+  if (!container) return;
   const el = document.createElement('div');
   el.className = 'toast';
   el.textContent = text;
   container.appendChild(el);
-  setTimeout(() => el.remove(), 2000);
+  setTimeout(() => { if (el.parentNode) el.remove(); }, 2000);
 }
 
 // ============================================================
@@ -1249,7 +1290,7 @@ let lastFrameTime = Date.now();
 
 function gameLoop() {
   const now = Date.now();
-  const delta = now - lastFrameTime;
+  const delta = Math.min(now - lastFrameTime, 500); // Cap to prevent overflow
   lastFrameTime = now;
   gs.lastUpdate = now;
 
@@ -1257,18 +1298,18 @@ function gameLoop() {
     heroAttackTimer += delta;
     enemyAttackTimer += delta;
 
-    const stats = getHeroStats();
-    const enemySpeed = gs.currentEnemy.speed || 1;
-    const enemyInterval = HERO_ATTACK_SPEED * (1 / enemySpeed) * 1.2;
-
     if (heroAttackTimer >= HERO_ATTACK_SPEED) {
       heroAttack();
       heroAttackTimer = 0;
     }
 
-    if (enemyAttackTimer >= enemyInterval) {
-      enemyAttack();
-      enemyAttackTimer = 0;
+    if (enemyAttackTimer > 0 && gs.currentEnemy) {
+      const enemySpeed = gs.currentEnemy.speed || 1;
+      const enemyInterval = HERO_ATTACK_SPEED * (1 / enemySpeed) * 1.2;
+      if (enemyAttackTimer >= enemyInterval) {
+        enemyAttack();
+        enemyAttackTimer = 0;
+      }
     }
   }
 
@@ -1302,12 +1343,19 @@ function loadGame() {
   if (!raw) return false;
   try {
     const save = JSON.parse(raw);
+    // Normalize inventory items (add rarity field for old saves)
+    if (save.inventory) {
+      save.inventory = save.inventory.map(item => ({
+        ...item,
+        rarity: item.rarity !== undefined ? item.rarity : (item.atk ? Math.min(Math.floor(item.atk / 5), 4) : Math.min(Math.floor(item.def / 3), 4))
+      }));
+    }
     Object.assign(gs, {
-      hero: save.hero,
-      stage: save.stage,
-      equipment: save.equipment,
-      inventory: save.inventory,
-      enemiesKilled: save.enemiesKilled,
+      hero: save.hero || gs.hero,
+      stage: save.stage || gs.stage,
+      equipment: save.equipment || gs.equipment,
+      inventory: save.inventory || [],
+      enemiesKilled: save.enemiesKilled || 0,
       totalKills: save.totalKills || 0,
       totalDeaths: save.totalDeaths || 0,
       totalLevelUps: save.totalLevelUps || 0,
@@ -1368,28 +1416,22 @@ function init() {
 document.addEventListener('click', (e) => {
   const popup = document.getElementById('gear-popup');
   const settings = document.getElementById('settings-popup');
-  if (popup.classList.contains('show') && !popup.contains(e.target) && !e.target.closest('.equip-slot') && !e.target.closest('.inv-slot')) {
+  if (popup && popup.classList.contains('show') && !popup.contains(e.target) && !e.target.closest('.equip-slot') && !e.target.closest('.inv-slot')) {
     closePopup();
   }
-  if (!settings.contains(e.target) && !e.target.closest('#settings-btn')) {
-    // settings closes on outside click only if clicking somewhere else
-  }
 });
 
-// Prevent settings from closing when clicking inside
-document.getElementById('settings-popup').addEventListener('click', (e) => {
-  e.stopPropagation();
-});
-document.getElementById('gear-popup').addEventListener('click', (e) => {
-  e.stopPropagation();
-});
-
-// Close popups on Escape
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closePopup();
     closeSettings();
   }
+});
+
+// Prevent settings/gear popups from closing when clicking inside them
+['settings-popup','gear-popup'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('click', (e) => e.stopPropagation());
 });
 
 // Init
