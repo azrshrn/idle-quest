@@ -219,6 +219,7 @@
     .float-dmg.gold { color: #eab308; font-size: 18px; }
     .float-dmg.xp { color: #a855f7; font-size: 16px; }
     .float-dmg.miss { color: #888; font-size: 14px; }
+    .float-dmg.loot { color: #e879f9; font-size: 16px; text-shadow: 0 0 15px #e879f9; }
     @keyframes float-dmg-anim { 0%{opacity:1;transform:translateY(0) scale(1)} 20%{transform:translateY(-20px) scale(1.2)} 100%{opacity:0;transform:translateY(-80px) scale(0.8)} }
 
     /* ===== COMBAT LOG ===== */
@@ -386,6 +387,41 @@
     #daily-bonus .reward { font-size: 20px; color: var(--neon-gold); font-weight: 800; margin-bottom: 16px; }
     #daily-bonus button { padding: 12px 32px; background: linear-gradient(135deg, var(--neon-gold), #ca8a04); border: none; border-radius: 10px; color: #000; font-size: 16px; font-weight: 800; cursor: pointer; transition: all 0.2s; }
     #daily-bonus button:hover { filter: brightness(1.1); transform: scale(1.05); }
+
+    /* ===== LOOT POPUP ===== */
+    #loot-popup {
+      position: fixed; top: 40%; left: 50%; transform: translate(-50%,-50%) scale(0);
+      background: linear-gradient(135deg, #0f0f2a, #1a0a2e);
+      border-radius: 16px; padding: 28px; z-index: 260;
+      text-align: center; transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.8); min-width: 280px;
+    }
+    #loot-popup.show { transform: translate(-50%,-50%) scale(1); }
+    .loot-glow {
+      position: absolute; inset: -3px; border-radius: 18px; pointer-events: none;
+      animation: loot-glow-pulse 1.5s ease infinite;
+    }
+    .loot-glow.common { background: linear-gradient(135deg, #888, #aaa); }
+    .loot-glow.uncommon { background: linear-gradient(135deg, #22c55e, #4ade80); box-shadow: 0 0 30px rgba(34,197,94,0.5); }
+    .loot-glow.rare { background: linear-gradient(135deg, #3b82f6, #60a5fa); box-shadow: 0 0 40px rgba(59,130,246,0.5); }
+    .loot-glow.epic { background: linear-gradient(135deg, #a855f7, #c084fc); box-shadow: 0 0 50px rgba(168,85,247,0.6); }
+    .loot-glow.legendary { background: linear-gradient(135deg, #eab308, #fde047); box-shadow: 0 0 60px rgba(234,179,8,0.7); animation: loot-glow-pulse 0.8s ease infinite; }
+    @keyframes loot-glow-pulse { 0%,100%{opacity:0.8} 50%{opacity:1} }
+    .loot-icon { font-size: 64px; margin: 12px 0 8px; filter: drop-shadow(0 0 20px rgba(255,255,255,0.3)); }
+    .loot-name { font-size: 20px; font-weight: 800; color: var(--text-primary); margin-bottom: 6px; }
+    .loot-rarity { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; }
+    .loot-rarity.common { color: #aaa; }
+    .loot-rarity.uncommon { color: #4ade80; }
+    .loot-rarity.rare { color: #60a5fa; }
+    .loot-rarity.epic { color: #c084fc; }
+    .loot-rarity.legendary { color: #eab308; }
+    .loot-stats { font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; display: flex; flex-direction: column; gap: 4px; }
+    .loot-actions { display: flex; gap: 8px; justify-content: center; }
+    .loot-actions button { padding: 10px 18px; border: none; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 700; transition: all 0.2s; }
+    .btn-loot-equip { background: linear-gradient(135deg, var(--neon-purple), #7c3aed); color: #fff; }
+    .btn-loot-equip:hover { filter: brightness(1.15); transform: translateY(-2px); }
+    .btn-loot-sell { background: rgba(234,179,8,0.15); color: var(--neon-gold); border: 1px solid rgba(234,179,8,0.3); }
+    .btn-loot-sell:hover { background: rgba(234,179,8,0.25); }
 
     /* ===== OVERLAY ===== */
     #overlay { position: fixed; inset: 0; background: rgba(50,0,0,0.85); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 200; gap: 14px; backdrop-filter: blur(8px); }
@@ -604,6 +640,19 @@
   <p id="daily-day-text">Day 1 Login Streak</p>
   <div class="reward" id="daily-reward-text">+500 💰</div>
   <button onclick="collectDaily()">Collect!</button>
+</div>
+
+<!-- LOOT POPUP -->
+<div id="loot-popup">
+  <div class="loot-glow" id="loot-glow"></div>
+  <div class="loot-icon" id="loot-popup-icon">🗡️</div>
+  <div class="loot-name" id="loot-popup-name">Item Name</div>
+  <div class="loot-rarity" id="loot-popup-rarity">Rare</div>
+  <div class="loot-stats" id="loot-popup-stats"></div>
+  <div class="loot-actions">
+    <button class="btn-loot-equip" onclick="lootEquipAndClose()">Equip Now ⚡</button>
+    <button class="btn-loot-sell" onclick="lootSellAndClose()">Sell 💰</button>
+  </div>
 </div>
 
 <!-- LEVEL UP FLASH -->
@@ -1180,6 +1229,25 @@ function enemyDie() {
     spawnFloatDmg(`+${xp} ✨`, 'xp', x + 30, y - 40);
   }
 
+  // Loot drop
+  const loot = generateLoot();
+  if (loot) {
+    gs.inventory.push(loot);
+    const sceneEl = document.getElementById('game-scene');
+    if (sceneEl && sceneRect && enemyEl) {
+      const rect = enemyEl.getBoundingClientRect();
+      const x = rect.left - sceneRect.left + rect.width/2;
+      const y = rect.top - sceneRect.top;
+      spawnFloatDmg(`${loot.emoji} ${loot.name}!`, 'loot', x + 20, y - 60);
+    }
+    if (loot.rarity >= 2) {
+      showLootPopup(loot);
+    } else {
+      showToast(`✨ ${loot.emoji} ${loot.name}`);
+    }
+    playSound('loot');
+  }
+
   gs.heroPosX = Math.min(50, gs.heroPosX + 5);
   const heroEl2 = document.getElementById('hero');
   if (heroEl2) heroEl2.style.left = gs.heroPosX + '%';
@@ -1362,10 +1430,11 @@ function generateLoot() {
 
   let rarity = 0;
   const roll = Math.random();
-  if (roll < 0.02 && maxRarity >= 4) rarity = 4;
-  else if (roll < 0.08 && maxRarity >= 3) rarity = 3;
-  else if (roll < 0.20 && maxRarity >= 2) rarity = 2;
-  else if (roll < 0.45 && maxRarity >= 1) rarity = 1;
+  if (roll < 0.003 && maxRarity >= 4) rarity = 4;         // 0.3% Legendary
+  else if (roll < 0.010 && maxRarity >= 3) rarity = 3;    // 0.7% Epic
+  else if (roll < 0.040 && maxRarity >= 2) rarity = 2;     // 3% Rare
+  else if (roll < 0.100 && maxRarity >= 1) rarity = 1;    // 6% Uncommon
+  // else 90% Common
 
   const tier = Math.min(rarity + randInt(0,1), templates.length-1);
   const template = templates[tier];
@@ -1895,6 +1964,86 @@ function dismissWelcome() {
 }
 
 // ============================================================
+// LOOT POPUP SYSTEM
+// ============================================================
+
+let pendingLoot = null;
+
+function showLootPopup(item) {
+  pendingLoot = item;
+  const popup = document.getElementById('loot-popup');
+  const icon = document.getElementById('loot-popup-icon');
+  const name = document.getElementById('loot-popup-name');
+  const rarity = document.getElementById('loot-popup-rarity');
+  const stats = document.getElementById('loot-popup-stats');
+  const glow = document.getElementById('loot-glow');
+
+  if (!popup || !icon || !name || !rarity || !stats || !glow) return;
+
+  const r = Math.min(item.rarity, 4);
+  const rarityName = RARITY_NAMES[r];
+  const rarityClass = rarityName.toLowerCase();
+
+  icon.textContent = item.emoji;
+  name.textContent = item.name;
+  rarity.textContent = rarityName;
+  rarity.className = `loot-rarity ${rarityClass}`;
+  glow.className = `loot-glow ${rarityClass}`;
+
+  let statsHTML = '';
+  if (item.atk) statsHTML += `<div>⚔️ ATK +${item.atk}</div>`;
+  if (item.def) statsHTML += `<div>🛡️ DEF +${item.def}</div>`;
+  statsHTML += `<div>⭐ Level ${item.level}</div>`;
+  stats.innerHTML = statsHTML;
+
+  popup.classList.add('show');
+  playSound('achieve');
+}
+
+function lootEquipAndClose() {
+  if (!pendingLoot) return;
+  // Equip the item
+  if (gs.equipment[pendingLoot.slot]) gs.inventory.push(gs.equipment[pendingLoot.slot]);
+  gs.equipment[pendingLoot.slot] = pendingLoot;
+  // Remove from inventory (already added above via push, need to remove the latest duplicate)
+  // Actually pendingLoot was already pushed to inventory in enemyDie, so find and remove it
+  const idx = gs.inventory.lastIndexOf(pendingLoot);
+  if (idx !== -1) gs.inventory.splice(idx, 1);
+  pendingLoot = null;
+  const popup = document.getElementById('loot-popup');
+  if (popup) popup.classList.remove('show');
+  updateEquipmentUI();
+  updateInventoryUI();
+  updateUI();
+  checkAchievements();
+  saveGame();
+  showToast('⚡ Item equipped!');
+}
+
+function lootSellAndClose() {
+  if (!pendingLoot) return;
+  const r = Math.min(pendingLoot.rarity, 4);
+  const sellValue = Math.floor(pendingLoot.level * RARITY_SELL_MULT[r] * 2);
+  gainGold(sellValue);
+  // Remove from inventory
+  const idx = gs.inventory.indexOf(pendingLoot);
+  if (idx !== -1) gs.inventory.splice(idx, 1);
+  pendingLoot = null;
+  const popup = document.getElementById('loot-popup');
+  if (popup) popup.classList.remove('show');
+  updateInventoryUI();
+  updateUI();
+  saveGame();
+  showToast(`Sold for 💰 ${formatNum(sellValue)}`);
+}
+
+function closeLootPopup() {
+  pendingLoot = null;
+  const popup = document.getElementById('loot-popup');
+  if (popup) popup.classList.remove('show');
+}
+
+// ============================================================
 // TOAST SYSTEM
 // ============================================================
 
@@ -2067,6 +2216,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closePopup();
     closeSettings();
+    closeLootPopup();
   }
 });
 
