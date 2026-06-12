@@ -92,7 +92,7 @@
     @keyframes enemy-hurt { 0%,100%{transform:scale(1)} 50%{transform:scale(1.3)} }
     #enemy.dying { animation: enemy-die 0.5s ease forwards; }
     @keyframes enemy-die { 0%{transform:scale(1) rotate(0deg);opacity:1} 100%{transform:scale(0) rotate(360deg);opacity:0} }
-    #enemy-label { font-size: 11px; background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 4px; color: #e74c3c; text-align: center; position: absolute; left: 50%; transform: translateX(-50%); margin-top: -20px; }
+    #enemy-label { font-size: 11px; background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 4px; color: #e74c3c; text-align: center; }
     #enemy.boss-enemy { font-size: 80px; }
     #enemy.boss-enemy + #enemy-label { color: #FFD700; font-size: 12px; }
 
@@ -259,10 +259,10 @@
     <div id="enemy-name">🐍 Slime</div>
     <div id="enemy-hp-bar-wrapper"><div id="enemy-hp-bar"></div></div>
     <div id="enemy-hp-text">30/30</div>
+    <div id="enemy-label">HP 30</div>
   </div>
   <div id="hero">🧙‍♂️<div id="hero-label">Lv1</div></div>
   <div id="enemy"></div>
-  <div id="enemy-label">HP 30</div>
   <div id="combat-log"></div>
 </div>
 
