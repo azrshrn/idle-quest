@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Idle Quest — Auto RPG</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0a0a1a;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+    }
+
+    /* ===== TOP HUD ===== */
+    #hud {
+      width: 100%;
+      max-width: 600px;
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      border-bottom: 2px solid rgba(255,255,255,0.1);
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    #hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    #stage-display {
+      font-size: 18px;
+      font-weight: bold;
+      color: #FFD700;
+    }
+
+    #gold-display {
+      font-size: 18px;
+      color: #FFD700;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    #hp-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #hp-bar-wrapper {
+      flex: 1;
+      height: 20px;
+      background: #333;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 2px solid rgba(255,255,255,0.2);
+    }
+
+    #hp-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #c0392b, #e74c3c);
+      width: 100%;
+      transition: width 0.3s ease;
+      border-radius: 8px;
+    }
+
+    #hp-text {
+      font-size: 14px;
+      min-width: 90px;
+      text-align: right;
+    }
+
+    #stage-progress {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .stage-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #444;
+      border: 2px solid #666;
+      transition: all 0.3s;
+    }
+
+    .stage-dot.active {
+      background: #2ecc71;
+      border-color: #27ae60;
+      box-shadow: 0 0 8px #2ecc71;
+    }
+
+    .stage-dot.done {
+      background: #8B7355;
+      border-color: #6B5344;
+    }
+
+    /* ===== GAME SCENE ===== */
+    #game-scene {
+      width: 100%;
+      max-width: 600px;
+      height: 320px;
+      background: linear-gradient(180deg, #87CEEB 0%, #98D8AA 60%, #6B8E23 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cloud {
+      position: absolute;
+      font-size: 40px;
+      opacity: 0.8;
+      animation: float-cloud 20s linear infinite;
+    }
+
+    @keyframes float-cloud {
+      from { transform: translateX(650px); }
+      to { transform: translateX(-100px); }
+    }
+
+    .tree {
+      position: absolute;
+      bottom: 100px;
+      font-size: 50px;
+    }
+
+    #path {
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      height: 120px;
+      background: linear-gradient(180deg, #8B7355 0%, #6B5344 100%);
+      clip-path: polygon(35% 0%, 65% 0%, 100% 100%, 0% 100%);
+    }
+
+    /* ===== ENTITIES ===== */
+    #hero {
+      position: absolute;
+      bottom: 30px;
+      left: 25%;
+      transform: translateX(-50%);
+      font-size: 60px;
+      transition: left 0.5s ease;
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
+      animation: hero-bob 1s ease-in-out infinite;
+      z-index: 10;
+    }
+
+    @keyframes hero-bob {
+      0%, 100% { transform: translateX(-50%) translateY(0); }
+      50% { transform: translateX(-50%) translateY(-6px); }
+    }
+
+    #hero.hurt {
+      animation: hurt-shake 0.3s ease;
+    }
+
+    @keyframes hurt-shake {
+      0%, 100% { transform: translateX(-50%) translateY(0); filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4)); }
+      25% { transform: translateX(calc(-50% + 8px)) translateY(-2px); filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4)) brightness(2); }
+      75% { transform: translateX(calc(-50% - 8px)) translateY(-2px); filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4)) brightness(2); }
+    }
+
+    #enemy {
+      position: absolute;
+      bottom: 80px;
+      right: 20%;
+      font-size: 60px;
+      transition: right 0.5s ease, opacity 0.3s;
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
+      z-index: 9;
+    }
+
+    #enemy.hurt {
+      animation: enemy-hurt 0.3s ease;
+    }
+
+    @keyframes enemy-hurt {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4)); }
+      50% { transform: scale(1.2); filter: drop-shadow(0 0 12px #fff) brightness(1.5); }
+    }
+
+    #enemy.dying {
+      animation: enemy-die 0.5s ease forwards;
+    }
+
+    @keyframes enemy-die {
+      0% { transform: scale(1) rotate(0deg); opacity: 1; }
+      100% { transform: scale(0) rotate(360deg); opacity: 0; }
+    }
+
+    /* ===== COMBAT LOG ===== */
+    #combat-log {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    .combat-text {
+      font-size: 14px;
+      font-weight: bold;
+      padding: 2px 8px;
+      border-radius: 4px;
+      animation: float-up 1.5s ease forwards;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    }
+
+    .combat-text.damage { color: #e74c3c; background: rgba(231,76,60,0.2); }
+    .combat-text.crit { color: #ff6b6b; background: rgba(255,107,107,0.3); }
+    .combat-text.heal { color: #2ecc71; background: rgba(46,204,113,0.2); }
+    .combat-text.gold { color: #FFD700; background: rgba(255,215,0,0.2); }
+    .combat-text.levelup { color: #9b59b6; background: rgba(155,89,182,0.3); font-size: 16px; }
+
+    @keyframes float-up {
+      0% { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; transform: translateY(-40px); }
+    }
+
+    /* ===== STATS BAR ===== */
+    #stats-bar {
+      width: 100%;
+      max-width: 600px;
+      background: #1a1a2e;
+      display: flex;
+      justify-content: space-around;
+      padding: 10px;
+      border-bottom: 2px solid rgba(255,255,255,0.1);
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .stat-icon { font-size: 20px; }
+    .stat-label { font-size: 11px; color: #aaa; }
+    .stat-value { font-size: 18px; font-weight: bold; }
+    .stat-value.atk { color: #e74c3c; }
+    .stat-value.def { color: #3498db; }
+    .stat-value.lvl { color: #9b59b6; }
+
+    /* ===== BOTTOM PANELS ===== */
+    #bottom-panels {
+      width: 100%;
+      max-width: 600px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+      background: #1a1a2e;
+      flex: 1;
+    }
+
+    .panel {
+      background: #1a1a2e;
+      padding: 12px;
+    }
+
+    .panel-title {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* ===== EQUIPMENT ===== */
+    #equipment-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .equip-slot {
+      aspect-ratio: 1;
+      background: rgba(255,255,255,0.05);
+      border: 2px dashed rgba(255,255,255,0.2);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+
+    .equip-slot:hover { border-color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.1); }
+    .equip-slot.filled { border: 2px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.08); }
+    .equip-slot.filled:hover { transform: scale(1.05); box-shadow: 0 0 12px rgba(155,89,182,0.5); }
+
+    .equip-slot .slot-icon { font-size: 28px; }
+    .equip-slot .slot-level {
+      position: absolute;
+      bottom: 2px;
+      right: 4px;
+      font-size: 10px;
+      background: rgba(0,0,0,0.6);
+      padding: 1px 4px;
+      border-radius: 4px;
+      color: #FFD700;
+    }
+
+    .equip-slot .slot-type {
+      font-size: 9px;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    /* ===== STAGE INFO ===== */
+    #stage-info {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+
+    .info-label { color: #888; }
+    .info-value { color: #fff; font-weight: bold; }
+
+    #enemy-type {
+      font-size: 14px;
+      color: #e74c3c;
+      text-align: center;
+      padding: 4px;
+      background: rgba(231,76,60,0.1);
+      border-radius: 4px;
+    }
+
+    /* ===== GEAR POPUP ===== */
+    #gear-popup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      border: 2px solid #9b59b6;
+      border-radius: 12px;
+      padding: 20px;
+      z-index: 100;
+      min-width: 260px;
+      transition: transform 0.2s ease;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    }
+
+    #gear-popup.show { transform: translate(-50%, -50%) scale(1); }
+
+    #gear-popup .popup-title {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 12px;
+      color: #FFD700;
+    }
+
+    #gear-popup .popup-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    #gear-popup .popup-stat {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    #gear-popup .popup-stat-label { color: #aaa; }
+    #gear-popup .popup-stat-value.atk { color: #e74c3c; }
+    #gear-popup .popup-stat-value.def { color: #3498db; }
+
+    #gear-popup .popup-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    #gear-popup button {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+      transition: all 0.2s;
+    }
+
+    #gear-popup .btn-equip { background: #9b59b6; color: #fff; }
+    #gear-popup .btn-equip:hover { background: #8e44ad; }
+    #gear-popup .btn-sell { background: rgba(255,255,255,0.1); color: #aaa; }
+    #gear-popup .btn-sell:hover { background: rgba(255,255,255,0.2); color: #fff; }
+    #gear-popup .btn-close { background: rgba(255,255,255,0.1); color: #aaa; }
+
+    /* ===== OVERLAY (DEATH) ===== */
+    #overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(139, 0, 0, 0.7);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      gap: 16px;
+    }
+
+    #overlay.show { display: flex; }
+
+    #overlay h2 { font-size: 48px; color: #fff; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+    #overlay p { font-size: 18px; color: #ddd; }
+    #overlay button {
+      padding: 12px 32px;
+      background: #9b59b6;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    #overlay button:hover { background: #8e44ad; transform: scale(1.05); }
+
+    /* ===== LEVEL UP EFFECT ===== */
+    #levelup-flash {
+      position: fixed;
+      inset: 0;
+      background: rgba(155,89,182,0.3);
+      pointer-events: none;
+      opacity: 0;
+      z-index: 150;
+      transition: opacity 0.3s;
+    }
+
+    #levelup-flash.show { opacity: 1; }
+
+    /* ===== INVENTORY PANEL ===== */
+    #inventory-panel {
+      width: 100%;
+      max-width: 600px;
+      background: #1a1a2e;
+      border-top: 2px solid rgba(255,255,255,0.1);
+      padding: 12px;
+    }
+
+    #inventory-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    #inventory-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+    }
+
+    .inv-slot {
+      aspect-ratio: 1;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+
+    .inv-slot:hover { background: rgba(255,255,255,0.15); transform: scale(1.05); }
+    .inv-slot .slot-level {
+      position: absolute;
+      bottom: 1px;
+      right: 3px;
+      font-size: 9px;
+      background: rgba(0,0,0,0.6);
+      padding: 0 3px;
+      border-radius: 3px;
+      color: #FFD700;
+    }
+
+    .inv-slot.empty { opacity: 0.4; cursor: default; }
+    .inv-slot.empty:hover { transform: none; background: rgba(255,255,255,0.05); }
+
+    /* ===== TOAST ===== */
+    #toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: #1a1a2e;
+      border: 1px solid #9b59b6;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: transform 0.3s ease;
+      z-index: 300;
+    }
+
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 480px) {
+      #game-scene { height: 260px; }
+      #hero, #enemy { font-size: 50px; }
+      .stat-value { font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- TOP HUD -->
+<div id="hud">
+  <div id="hud-top">
+    <span id="stage-display">STAGE 1-1</span>
+    <span id="gold-display">💰 <span id="gold-value">0</span></span>
+  </div>
+  <div id="hp-container">
+    <span>❤️</span>
+    <div id="hp-bar-wrapper">
+      <div id="hp-bar"></div>
+    </div>
+    <span id="hp-text">100/100</span>
+  </div>
+  <div id="stage-progress"></div>
+</div>
+
+<!-- GAME SCENE -->
+<div id="game-scene">
+  <div class="cloud" style="top: 20px; animation-delay: 0s;">☁️</div>
+  <div class="cloud" style="top: 50px; animation-delay: -7s;">☁️</div>
+  <div class="cloud" style="top: 30px; animation-delay: -14s;">☁️</div>
+  <div class="tree" style="left: 5%;">🌲</div>
+  <div class="tree" style="right: 5%;">🌲</div>
+  <div class="tree" style="left: 15%; font-size: 40px;">🌳</div>
+  <div class="tree" style="right: 15%; font-size: 40px;">🌳</div>
+  <div id="path"></div>
+  <div id="hero">🧙‍♂️</div>
+  <div id="enemy">🐍</div>
+  <div id="combat-log"></div>
+</div>
+
+<!-- STATS BAR -->
+<div id="stats-bar">
+  <div class="stat-item">
+    <span class="stat-icon">⚔️</span>
+    <span class="stat-label">ATK</span>
+    <span class="stat-value atk" id="stat-atk">10</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-icon">🛡️</span>
+    <span class="stat-label">DEF</span>
+    <span class="stat-value def" id="stat-def">5</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-icon">⭐</span>
+    <span class="stat-label">LVL</span>
+    <span class="stat-value lvl" id="stat-lvl">1</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-icon">✨</span>
+    <span class="stat-label">XP</span>
+    <span class="stat-value" id="stat-xp">0/10</span>
+  </div>
+</div>
+
+<!-- BOTTOM PANELS -->
+<div id="bottom-panels">
+  <div class="panel">
+    <div class="panel-title">⚔️ Equipment</div>
+    <div id="equipment-grid">
+      <div class="equip-slot" data-slot="weapon" onclick="showEquipPopup('weapon')">
+        <span class="slot-icon">🗡️</span>
+        <span class="slot-type">Weapon</span>
+      </div>
+      <div class="equip-slot" data-slot="armor" onclick="showEquipPopup('armor')">
+        <span class="slot-icon">👕</span>
+        <span class="slot-type">Armor</span>
+      </div>
+      <div class="equip-slot" data-slot="helmet" onclick="showEquipPopup('helmet')">
+        <span class="slot-icon">🪖</span>
+        <span class="slot-type">Helmet</span>
+      </div>
+      <div class="equip-slot" data-slot="boots" onclick="showEquipPopup('boots')">
+        <span class="slot-icon">👢</span>
+        <span class="slot-type">Boots</span>
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">📍 Stage Info</div>
+    <div id="stage-info">
+      <div class="info-row">
+        <span class="info-label">Progress</span>
+        <span class="info-value" id="kill-counter">0/5</span>
+      </div>
+      <div id="enemy-type">🐍 Slime</div>
+      <div class="info-row">
+        <span class="info-label">Next Stage</span>
+        <span class="info-value" id="next-enemy">—</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- INVENTORY -->
+<div id="inventory-panel">
+  <div id="inventory-header">
+    <span class="panel-title">🎒 Inventory (<span id="inv-count">0</span>/20)</span>
+  </div>
+  <div id="inventory-grid"></div>
+</div>
+
+<!-- GEAR POPUP -->
+<div id="gear-popup">
+  <div class="popup-title" id="popup-title">Item Name</div>
+  <div class="popup-stats" id="popup-stats"></div>
+  <div class="popup-actions">
+    <button class="btn-equip" id="btn-popup-equip" onclick="popupEquip()">Equip</button>
+    <button class="btn-sell" id="btn-popup-sell" onclick="popupSell()">Sell 💰</button>
+    <button class="btn-close" onclick="closePopup()">✕</button>
+  </div>
+</div>
+
+<!-- DEATH OVERLAY -->
+<div id="overlay">
+  <h2>💀 DEFEATED</h2>
+  <p id="respawn-text">Respawning in 5s...</p>
+  <button onclick="respawnNow()">Respawn Now</button>
+</div>
+
+<!-- LEVEL UP FLASH -->
+<div id="levelup-flash"></div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// =====================
+// GAME DATA
+// =====================
+
+const ENEMY_TYPES = [
+  { name: 'Slime', emoji: '🐍', baseHp: 30, baseAtk: 5, gold: [3, 6] },
+  { name: 'Goblin', emoji: '👺', baseHp: 50, baseAtk: 8, gold: [6, 12] },
+  { name: 'Skeleton', emoji: '💀', baseHp: 80, baseAtk: 12, gold: [12, 20] },
+];
+
+const GEAR_TEMPLATES = {
+  weapon: [
+    { name: 'Rusty Dagger', atk: 3, emoji: '🗡️' },
+    { name: 'Iron Sword', atk: 6, emoji: '⚔️' },
+    { name: 'Steel Blade', atk: 10, emoji: '🗡️' },
+    { name: 'Flame Sword', atk: 15, emoji: '🔥' },
+    { name: 'Dragon Slayer', atk: 22, emoji: '🐉' },
+  ],
+  armor: [
+    { name: 'Cloth Armor', def: 2, emoji: '👕' },
+    { name: 'Leather Vest', def: 5, emoji: '🦺' },
+    { name: 'Chain Mail', def: 8, emoji: '⛓️' },
+    { name: 'Plate Armor', def: 12, emoji: '🛡️' },
+    { name: 'Dragon Scale', def: 18, emoji: '🐲' },
+  ],
+  helmet: [
+    { name: 'Leather Cap', def: 1, emoji: '🧢' },
+    { name: 'Iron Helm', def: 3, emoji: '⛑️' },
+    { name: 'Knight Helm', def: 5, emoji: '🪖' },
+    { name: 'War Crown', def: 8, emoji: '👑' },
+    { name: 'Dragon Helm', def: 12, emoji: '🐉' },
+  ],
+  boots: [
+    { name: 'Sandals', def: 1, emoji: '🥿' },
+    { name: 'Leather Boots', def: 2, emoji: '👢' },
+    { name: 'Iron Boots', def: 4, emoji: '🥾' },
+    { name: 'Knight Greaves', def: 6, emoji: '🦶' },
+    { name: 'Wind Walkers', def: 9, emoji: '💨' },
+  ],
+};
+
+const SLOT_ICONS = { weapon: '🗡️', armor: '👕', helmet: '🪖', boots: '👢' };
+const SLOT_NAMES = { weapon: 'Weapon', armor: 'Armor', helmet: 'Helmet', boots: 'Boots' };
+
+// =====================
+// GAME STATE
+// =====================
+
+let gs = {
+  hero: { hp: 50, maxHp: 50, atk: 10, def: 5, level: 1, xp: 0, xpToLevel: 10, gold: 0 },
+  stage: { section: 1, level: 1 },
+  equipment: { weapon: null, armor: null, helmet: null, boots: null },
+  inventory: [],
+  enemiesKilled: 0,
+  enemiesPerStage: 5,
+  isHeroAlive: true,
+  respawnTimer: 0,
+  currentEnemy: null,
+  gameStarted: false,
+  lastUpdate: Date.now(),
+};
+
+// =====================
+// UTILITY
+// =====================
+
+function formatNum(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return Math.floor(n).toString();
+}
+
+function randInt(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
+function randChoice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function getStageMultiplier() {
+  const s = gs.stage.section;
+  const l = gs.stage.level;
+  return 1 + (s - 1) * 0.5 + (l - 1) * 0.15;
+}
+
+function getHeroStats() {
+  let atk = gs.hero.level * 5;
+  let def = gs.hero.level * 2;
+  let maxHp = 50 + (gs.hero.level - 1) * 20;
+
+  if (gs.equipment.weapon) atk += gs.equipment.weapon.atk;
+  if (gs.equipment.armor) def += gs.equipment.armor.def;
+  if (gs.equipment.helmet) def += gs.equipment.helmet.def;
+  if (gs.equipment.boots) def += gs.equipment.boots.def;
+
+  return { atk, def, maxHp };
+}
+
+function spawnEnemy() {
+  const idx = Math.min(Math.floor((gs.stage.section - 1) * 1.5), ENEMY_TYPES.length - 1);
+  const type = ENEMY_TYPES[idx];
+  const mult = getStageMultiplier();
+
+  gs.currentEnemy = {
+    ...type,
+    hp: Math.floor(type.baseHp * mult),
+    maxHp: Math.floor(type.baseHp * mult),
+    atk: Math.floor(type.baseAtk * mult),
+    gold: type.gold.map(g => Math.floor(g * mult)),
+  };
+
+  const nextIdx = Math.min(idx + 1, ENEMY_TYPES.length - 1);
+  document.getElementById('enemy-type').textContent = `${type.emoji} ${type.name}`;
+  document.getElementById('next-enemy').textContent = `${ENEMY_TYPES[nextIdx].emoji} ${ENEMY_TYPES[nextIdx].name}`;
+
+  document.getElementById('enemy').style.opacity = '0';
+  document.getElementById('enemy').className = '';
+  setTimeout(() => {
+    document.getElementById('enemy').textContent = type.emoji;
+    document.getElementById('enemy').style.opacity = '1';
+    document.getElementById('enemy').style.right = '20%';
+  }, 300);
+}
+
+function combatLog(text, type = 'damage') {
+  const log = document.getElementById('combat-log');
+  const el = document.createElement('div');
+  el.className = `combat-text ${type}`;
+  el.textContent = text;
+  log.appendChild(el);
+  setTimeout(() => el.remove(), 1500);
+}
+
+function showToast(text) {
+  const toast = document.getElementById('toast');
+  toast.textContent = text;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+function levelUp() {
+  gs.hero.level++;
+  gs.hero.xp = 0;
+  gs.hero.xpToLevel = Math.floor(gs.hero.xpToLevel * 1.5);
+  const stats = getHeroStats();
+  gs.hero.maxHp = stats.maxHp;
+  gs.hero.hp = gs.hero.maxHp;
+
+  combatLog(`⬆️ LEVEL ${gs.hero.level}!`, 'levelup');
+
+  const flash = document.getElementById('levelup-flash');
+  flash.classList.add('show');
+  setTimeout(() => flash.classList.remove('show'), 500);
+
+  updateUI();
+  saveGame();
+}
+
+function gainXP(amount) {
+  gs.hero.xp += amount;
+  combatLog(`+${amount} XP`, 'heal');
+  if (gs.hero.xp >= gs.hero.xpToLevel) levelUp();
+}
+
+function gainGold(amount) {
+  gs.hero.gold += amount;
+  combatLog(`+${amount} 💰`, 'gold');
+}
+
+function gainItem(item) {
+  if (gs.inventory.length >= 20) {
+    showToast('Inventory full! Sell some items.');
+    return false;
+  }
+  gs.inventory.push(item);
+  showToast(`✨ ${item.emoji} ${item.name}`);
+  return true;
+}
+
+function generateLoot() {
+  // 40% chance to drop gear
+  if (Math.random() < 0.4) {
+    const slotTypes = Object.keys(GEAR_TEMPLATES);
+    const slot = randChoice(slotTypes);
+    const tier = Math.min(
+      Math.floor((gs.stage.section - 1) * 1.2 + (gs.stage.level - 1) * 0.2),
+      GEAR_TEMPLATES[slot].length - 1
+    );
+    const template = GEAR_TEMPLATES[slot][tier];
+    const item = {
+      ...template,
+      slot,
+      level: gs.hero.level + randInt(0, 2),
+    };
+    return item;
+  }
+  return null;
+}
+
+// =====================
+// COMBAT
+// =====================
+
+let heroAttackTimer = 0;
+let enemyAttackTimer = 0;
+const HERO_ATTACK_SPEED = 1500; // ms
+const ENEMY_ATTACK_SPEED = 2000; // ms
+
+function heroAttack() {
+  if (!gs.currentEnemy || !gs.isHeroAlive) return;
+
+  const stats = getHeroStats();
+  const isCrit = Math.random() < 0.1;
+  let dmg = stats.atk - Math.floor(gs.currentEnemy.def * 0.3);
+  dmg = Math.max(1, dmg);
+  if (isCrit) dmg = Math.floor(dmg * 1.5);
+
+  gs.currentEnemy.hp -= dmg;
+
+  const heroEl = document.getElementById('hero');
+  heroEl.classList.remove('hurt');
+  void heroEl.offsetWidth;
+  heroEl.classList.add('hurt');
+
+  const enemyEl = document.getElementById('enemy');
+  enemyEl.classList.remove('hurt');
+  void enemyEl.offsetWidth;
+  enemyEl.classList.add('hurt');
+
+  combatLog(`-${dmg}${isCrit ? ' CRIT!' : ''}`, isCrit ? 'crit' : 'damage');
+
+  if (gs.currentEnemy.hp <= 0) {
+    enemyDie();
+  }
+}
+
+function enemyAttack() {
+  if (!gs.currentEnemy || !gs.isHeroAlive) return;
+
+  const stats = getHeroStats();
+  let dmg = gs.currentEnemy.atk - Math.floor(stats.def * 0.3);
+  dmg = Math.max(1, dmg);
+
+  gs.hero.hp -= dmg;
+
+  const heroEl = document.getElementById('hero');
+  heroEl.classList.remove('hurt');
+  void heroEl.offsetWidth;
+  heroEl.classList.add('hurt');
+
+  combatLog(`-${dmg}`, 'damage');
+
+  if (gs.hero.hp <= 0) {
+    heroDie();
+  }
+
+  updateUI();
+}
+
+function enemyDie() {
+  const gold = randInt(gs.currentEnemy.gold[0], gs.currentEnemy.gold[1]);
+  gainGold(gold);
+  gainXP(randInt(3, 8));
+
+  const loot = generateLoot();
+  if (loot) gainItem(loot);
+
+  gs.enemiesKilled++;
+  updateUI();
+
+  const enemyEl = document.getElementById('enemy');
+  enemyEl.classList.add('dying');
+
+  setTimeout(() => {
+    if (gs.enemiesKilled >= gs.enemiesPerStage) {
+      nextStage();
+    } else {
+      spawnEnemy();
+    }
+  }, 600);
+
+  saveGame();
+}
+
+function heroDie() {
+  gs.isHeroAlive = false;
+  gs.respawnTimer = 5;
+  gs.hero.hp = 0;
+
+  const lostGold = Math.floor(gs.hero.gold * 0.1);
+  gs.hero.gold -= lostGold;
+  showToast(`Lost ${lostGold} gold...`);
+
+  document.getElementById('overlay').classList.add('show');
+  countdownRespawn();
+
+  updateUI();
+  saveGame();
+}
+
+function countdownRespawn() {
+  const txt = document.getElementById('respawn-text');
+  if (gs.respawnTimer > 0) {
+    txt.textContent = `Respawning in ${gs.respawnTimer}s...`;
+    gs.respawnTimer--;
+    setTimeout(countdownRespawn, 1000);
+  }
+}
+
+function respawnNow() {
+  gs.respawnTimer = 0;
+  respawnHero();
+}
+
+function respawnHero() {
+  gs.isHeroAlive = true;
+  const stats = getHeroStats();
+  gs.hero.hp = gs.hero.maxHp;
+  document.getElementById('overlay').classList.remove('show');
+  spawnEnemy();
+  updateUI();
+  saveGame();
+}
+
+function nextStage() {
+  gs.enemiesKilled = 0;
+  if (gs.stage.level >= 5) {
+    gs.stage.level = 1;
+    gs.stage.section++;
+    showToast(`🎉 Section ${gs.stage.section}!`);
+  } else {
+    gs.stage.level++;
+  }
+  spawnEnemy();
+  updateUI();
+  saveGame();
+}
+
+// =====================
+// EQUIPMENT UI
+// =====================
+
+function updateEquipmentUI() {
+  for (const slot of ['weapon', 'armor', 'helmet', 'boots']) {
+    const el = document.querySelector(`[data-slot="${slot}"]`);
+    const item = gs.equipment[slot];
+    if (item) {
+      el.querySelector('.slot-icon').textContent = item.emoji;
+      el.classList.add('filled');
+      let levelEl = el.querySelector('.slot-level');
+      if (!levelEl) {
+        levelEl = document.createElement('span');
+        levelEl.className = 'slot-level';
+        el.appendChild(levelEl);
+      }
+      levelEl.textContent = `Lv${item.level}`;
+    } else {
+      el.querySelector('.slot-icon').textContent = SLOT_ICONS[slot];
+      el.classList.remove('filled');
+      const levelEl = el.querySelector('.slot-level');
+      if (levelEl) levelEl.remove();
+    }
+  }
+}
+
+function updateInventoryUI() {
+  const grid = document.getElementById('inventory-grid');
+  grid.innerHTML = '';
+  for (let i = 0; i < 20; i++) {
+    const item = gs.inventory[i];
+    const slot = document.createElement('div');
+    slot.className = 'inv-slot' + (item ? '' : ' empty');
+    if (item) {
+      slot.textContent = item.emoji;
+      const lv = document.createElement('span');
+      lv.className = 'slot-level';
+      lv.textContent = `Lv${item.level}`;
+      slot.appendChild(lv);
+      slot.onclick = () => showInventoryPopup(i);
+    }
+    grid.appendChild(slot);
+  }
+  document.getElementById('inv-count').textContent = gs.inventory.length;
+}
+
+let popupMode = null; // 'equip-slot' or 'inventory'
+let popupIndex = null;
+let popupItem = null;
+
+function showEquipPopup(slot) {
+  const item = gs.equipment[slot];
+  if (!item) return;
+  popupMode = 'equip-slot';
+  popupIndex = slot;
+  popupItem = item;
+  showPopup(item);
+}
+
+function showInventoryPopup(idx) {
+  popupMode = 'inventory';
+  popupIndex = idx;
+  popupItem = gs.inventory[idx];
+  showPopup(popupItem);
+}
+
+function showPopup(item) {
+  document.getElementById('popup-title').textContent = `${item.emoji} ${item.name}`;
+  const statsEl = document.getElementById('popup-stats');
+  statsEl.innerHTML = '';
+  if (item.atk) {
+    statsEl.innerHTML += `<div class="popup-stat"><span class="popup-stat-label">ATK</span><span class="popup-stat-value atk">+${item.atk}</span></div>`;
+  }
+  if (item.def) {
+    statsEl.innerHTML += `<div class="popup-stat"><span class="popup-stat-label">DEF</span><span class="popup-stat-value def">+${item.def}</span></div>`;
+  }
+  statsEl.innerHTML += `<div class="popup-stat"><span class="popup-stat-label">Req Level</span><span class="popup-stat-value">${item.level}</span></div>`;
+
+  const btnEquip = document.getElementById('btn-popup-equip');
+  const btnSell = document.getElementById('btn-popup-sell');
+
+  // Check if already equipped in that slot
+  const currentEquipped = gs.equipment[item.slot];
+  if (currentEquipped === item) {
+    btnEquip.textContent = 'Unequip';
+  } else {
+    btnEquip.textContent = item.atk ? 'Equip Weapon' : 'Equip';
+  }
+
+  const sellValue = Math.floor(item.level * 2 + (item.atk || item.def) * 3);
+  btnSell.textContent = `Sell 💰${sellValue}`;
+
+  document.getElementById('gear-popup').classList.add('show');
+}
+
+function closePopup() {
+  document.getElementById('gear-popup').classList.remove('show');
+  popupMode = null;
+  popupIndex = null;
+  popupItem = null;
+}
+
+function popupEquip() {
+  if (!popupItem) return;
+
+  if (popupMode === 'equip-slot') {
+    // Unequip
+    const slot = popupItem.slot;
+    gs.inventory.push(gs.equipment[slot]);
+    gs.equipment[slot] = null;
+  } else if (popupMode === 'inventory') {
+    const slot = popupItem.slot;
+    if (gs.equipment[slot]) {
+      gs.inventory.push(gs.equipment[slot]);
+    }
+    gs.equipment[slot] = popupItem;
+    gs.inventory.splice(popupIndex, 1);
+  }
+
+  updateEquipmentUI();
+  updateInventoryUI();
+  updateUI();
+  closePopup();
+  saveGame();
+}
+
+function popupSell() {
+  if (!popupItem) return;
+  const sellValue = Math.floor(popupItem.level * 2 + (popupItem.atk || popupItem.def) * 3);
+  gainGold(sellValue);
+
+  if (popupMode === 'equip-slot') {
+    gs.equipment[popupItem.slot] = null;
+  } else if (popupMode === 'inventory') {
+    gs.inventory.splice(popupIndex, 1);
+  }
+
+  updateEquipmentUI();
+  updateInventoryUI();
+  updateUI();
+  closePopup();
+  saveGame();
+  showToast(`Sold for 💰${sellValue}`);
+}
+
+// =====================
+// UI UPDATE
+// =====================
+
+function updateUI() {
+  const stats = getHeroStats();
+
+  // HUD
+  document.getElementById('stage-display').textContent =
+    `STAGE ${gs.stage.section}-${gs.stage.level}`;
+  document.getElementById('gold-value').textContent = formatNum(gs.hero.gold);
+
+  // HP bar
+  gs.hero.maxHp = stats.maxHp;
+  const hpPct = Math.max(0, gs.hero.hp / gs.hero.maxHp * 100);
+  document.getElementById('hp-bar').style.width = hpPct + '%';
+  document.getElementById('hp-text').textContent =
+    `${formatNum(gs.hero.hp)}/${formatNum(gs.hero.maxHp)}`;
+
+  // Stage dots
+  const progressEl = document.getElementById('stage-progress');
+  progressEl.innerHTML = '';
+  for (let i = 0; i < gs.enemiesPerStage; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'stage-dot';
+    if (i < gs.enemiesKilled) dot.classList.add('done');
+    else if (i === gs.enemiesKilled) dot.classList.add('active');
+    progressEl.appendChild(dot);
+  }
+
+  // Stats
+  document.getElementById('stat-atk').textContent = stats.atk;
+  document.getElementById('stat-def').textContent = stats.def;
+  document.getElementById('stat-lvl').textContent = gs.hero.level;
+  document.getElementById('stat-xp').textContent = `${gs.hero.xp}/${gs.hero.xpToLevel}`;
+
+  // Kill counter
+  document.getElementById('kill-counter').textContent =
+    `${gs.enemiesKilled}/${gs.enemiesPerStage}`;
+
+  updateEquipmentUI();
+  updateInventoryUI();
+}
+
+// =====================
+// GAME LOOP
+// =====================
+
+function gameLoop() {
+  const now = Date.now();
+  const delta = now - gs.lastUpdate;
+  gs.lastUpdate = now;
+
+  if (gs.isHeroAlive && gs.currentEnemy) {
+    heroAttackTimer += delta;
+    enemyAttackTimer += delta;
+
+    if (heroAttackTimer >= HERO_ATTACK_SPEED) {
+      heroAttack();
+      heroAttackTimer = 0;
+    }
+
+    if (enemyAttackTimer >= ENEMY_ATTACK_SPEED) {
+      enemyAttack();
+      enemyAttackTimer = 0;
+    }
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+// =====================
+// SAVE / LOAD
+// =====================
+
+function saveGame() {
+  const save = {
+    hero: gs.hero,
+    stage: gs.stage,
+    equipment: gs.equipment,
+    inventory: gs.inventory,
+    enemiesKilled: gs.enemiesKilled,
+  };
+  localStorage.setItem('idlequest_save', JSON.stringify(save));
+}
+
+function loadGame() {
+  const raw = localStorage.getItem('idlequest_save');
+  if (!raw) return false;
+  try {
+    const save = JSON.parse(raw);
+    gs.hero = save.hero;
+    gs.stage = save.stage;
+    gs.equipment = save.equipment;
+    gs.inventory = save.inventory;
+    gs.enemiesKilled = save.enemiesKilled;
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// =====================
+// INIT
+// =====================
+
+function init() {
+  if (loadGame()) {
+    showToast('Game loaded!');
+  } else {
+    showToast('Welcome to Idle Quest!');
+  }
+
+  gs.isHeroAlive = true;
+  gs.lastUpdate = Date.now();
+  heroAttackTimer = 0;
+  enemyAttackTimer = 0;
+
+  spawnEnemy();
+  updateUI();
+  gameLoop();
+
+  // Auto-save every 10s
+  setInterval(saveGame, 10000);
+}
+
+// Start
+init();
+
+// Close popup on outside click
+document.addEventListener('click', (e) => {
+  const popup = document.getElementById('gear-popup');
+  if (popup.classList.contains('show') && !popup.contains(e.target) && !e.target.closest('.equip-slot') && !e.target.closest('.inv-slot')) {
+    closePopup();
+  }
+});
+</script>
+
+</body>
+</html>
