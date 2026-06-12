@@ -171,7 +171,6 @@
     #enemy-hp-bar-wrapper { height: 10px; background: rgba(0,0,0,0.5); border-radius: 5px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); }
     #enemy-hp-bar { height: 100%; background: linear-gradient(90deg, #166534, #22c55e); width: 100%; transition: width 0.4s ease; border-radius: 5px; }
     #enemy-hp-text { font-size: 10px; color: #ddd; margin-top: 2px; text-shadow: 1px 1px 3px rgba(0,0,0,0.7); }
-    #enemy-label { display: none; }
 
     /* ===== ENTITIES ===== */
     #hero {
@@ -527,7 +526,6 @@
     <div id="enemy-name">🐍 Slime</div>
     <div id="enemy-hp-bar-wrapper"><div id="enemy-hp-bar"></div></div>
     <div id="enemy-hp-text">30/30</div>
-    <div id="enemy-label">HP 30</div>
   </div>
 
   <div id="hero">🧙‍♂️<div id="hero-label">Lv1</div></div>
@@ -981,7 +979,6 @@ function spawnEnemy() {
   if (nameEl) nameEl.style.color = boss ? '#eab308' : '#fff';
 
   const enemyEl = document.getElementById('enemy');
-  const labelEl = document.getElementById('enemy-label');
   if (enemyEl) {
     enemyEl.className = '';
     enemyEl.textContent = type.emoji;
@@ -990,7 +987,6 @@ function spawnEnemy() {
     if (boss) enemyEl.classList.add('boss-enemy');
     else enemyEl.classList.remove('boss-enemy');
   }
-  if (labelEl) labelEl.textContent = `HP ${formatNum(gs.currentEnemy.maxHp)}`;
 
   updateEnemyHPBar();
   updateBossHPBar();
@@ -1517,9 +1513,7 @@ function updateEnemyHPBar() {
   else if (pct > 30) bar.style.background = 'linear-gradient(90deg, #b45309, #eab308)';
   else bar.style.background = 'linear-gradient(90deg, #991b1b, #ef4444)';
   const hpText = document.getElementById('enemy-hp-text');
-  const label = document.getElementById('enemy-label');
   if (hpText) hpText.textContent = `${formatNum(gs.currentEnemy.hp)}/${formatNum(gs.currentEnemy.maxHp)}`;
-  if (label) label.textContent = `HP ${formatNum(gs.currentEnemy.hp)}`;
 }
 
 function updateUI() {
